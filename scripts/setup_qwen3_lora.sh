@@ -29,13 +29,12 @@ else
   echo "[3/5] Downloading model $MODEL_REPO to $MODEL_DIR"
   mkdir -p "$MODEL_DIR"
   
-  # Try ModelScope first (prefered in mainland China)
+  # Try ModelScope first (preferred in mainland China), show progress
   echo "Attempting to download from ModelScope..."
-  if python -c "from modelscope import snapshot_download; snapshot_download('$MODEL_REPO', local_dir='$MODEL_DIR')" 2>/dev/null; then
+  if python -c "from modelscope import snapshot_download; snapshot_download('$MODEL_REPO', local_dir='$MODEL_DIR')"; then
     echo "Model downloaded successfully from ModelScope."
   else
-    echo "ModelScope download failed or not responsive. Falling back to Hugging Face..."
-    # Set mirror if not present
+    echo "ModelScope failed. Falling back to Hugging Face (hf-mirror.com)..."
     export HF_ENDPOINT="${HF_ENDPOINT:-https://hf-mirror.com}"
     huggingface-cli download "$MODEL_REPO" --local-dir "$MODEL_DIR" --resume-download
   fi

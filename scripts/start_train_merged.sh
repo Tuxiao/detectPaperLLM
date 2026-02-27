@@ -4,7 +4,7 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 export PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.0
 export NUM_PERTURB_SAMPLES=8
-export MAX_LENGTH=128
+export MAX_LENGTH=256
 export TRAIN_FILE="$ROOT_DIR/data/train_pairs_merged.jsonl"
 export OUTPUT_DIR="$ROOT_DIR/outputs/qwen3-0.6b-lora"
 export NUM_TRAIN_EPOCHS=5
