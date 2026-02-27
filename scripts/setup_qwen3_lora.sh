@@ -21,20 +21,24 @@ echo "[2/5] Installing dependencies"
 python -m pip install --upgrade pip setuptools wheel
 python -m pip install -r "$ROOT_DIR/requirements.txt"
 python -m pip install -e "$ROOT_DIR"
-python -m pip install "huggingface_hub>=0.26"
-
-# Check for Hugging Face mirror if it's likely needed (e.g. in some regions)
-if [[ -z "${HF_ENDPOINT:-}" ]]; then
-  echo "Tip: If you encounter network issues downloading from Hugging Face, try setting:"
-  echo "      export HF_ENDPOINT=https://hf-mirror.com"
-fi
+python -m pip install "huggingface_hub>=0.26" "modelscope"
 
 if [[ -f "$MODEL_DIR/model.safetensors" ]]; then
   echo "[3/5] Model already present: $MODEL_DIR"
 else
   echo "[3/5] Downloading model $MODEL_REPO to $MODEL_DIR"
   mkdir -p "$MODEL_DIR"
-  hf download "$MODEL_REPO" --local-dir "$MODEL_DIR"
+  
+  # Try ModelScope first (prefered in mainland China)
+  echo "Attempting to download from ModelScope..."
+  if python -c "from modelscope import snapshot_download; snapshot_download('$MODEL_REPO', local_dir='$MODEL_DIR')" 2>/dev/null; then
+    echo "Model downloaded successfully from ModelScope."
+  else
+    echo "ModelScope download failed or not responsive. Falling back to Hugging Face..."
+    # Set mirror if not present
+    export HF_ENDPOINT="${HF_ENDPOINT:-https://hf-mirror.com}"
+    huggingface-cli download "$MODEL_REPO" --local-dir "$MODEL_DIR" --resume-download
+  fi
 fi
 
 echo "[4/5] Writing accelerate config to $ACCEL_CONFIG"
