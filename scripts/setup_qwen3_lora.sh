@@ -23,6 +23,12 @@ python -m pip install -r "$ROOT_DIR/requirements.txt"
 python -m pip install -e "$ROOT_DIR"
 python -m pip install "huggingface_hub>=0.26"
 
+# Check for Hugging Face mirror if it's likely needed (e.g. in some regions)
+if [[ -z "${HF_ENDPOINT:-}" ]]; then
+  echo "Tip: If you encounter network issues downloading from Hugging Face, try setting:"
+  echo "      export HF_ENDPOINT=https://hf-mirror.com"
+fi
+
 if [[ -f "$MODEL_DIR/model.safetensors" ]]; then
   echo "[3/5] Model already present: $MODEL_DIR"
 else
