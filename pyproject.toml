@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "detectanyllm"
+version = "0.1.0"
+description = "DetectAnyLLM LoRA fine-tuning and inference toolkit with DDL objective."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "torch>=2.2",
+  "transformers>=4.44",
+  "datasets>=2.19",
+  "peft>=0.11",
+  "accelerate>=0.30",
+  "sentencepiece>=0.2",
+  "pytest>=8.0",
+]
+
+[project.scripts]
+detectanyllm = "detectanyllm.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

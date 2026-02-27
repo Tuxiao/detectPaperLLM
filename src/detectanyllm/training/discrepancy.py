@@ -1,0 +1,88 @@
+"""Conditional discrepancy computations for DetectAnyLLM."""
+
+from __future__ import annotations
+
+import torch
+import torch.nn.functional as F
+
+
+def _log_probs_and_seq_sum(
+    logits: torch.Tensor,
+    input_ids: torch.Tensor,
+    attention_mask: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    if input_ids.shape[1] < 2:
+        raise ValueError("Need at least 2 tokens per sequence for causal likelihood.")
+    if input_ids.device != logits.device:
+        input_ids = input_ids.to(logits.device)
+    if attention_mask.device != logits.device:
+        attention_mask = attention_mask.to(logits.device)
+
+    shift_logits = logits[:, :-1, :]
+    shift_labels = input_ids[:, 1:]
+    shift_mask = attention_mask[:, 1:].to(dtype=shift_logits.dtype)
+
+    log_probs = F.log_softmax(shift_logits, dim=-1)
+    token_log_probs = log_probs.gather(-1, shift_labels.unsqueeze(-1)).squeeze(-1)
+    seq_log_probs = (token_log_probs * shift_mask).sum(dim=-1)
+    return log_probs, seq_log_probs, shift_mask
+
+
+def compute_dc_from_logits(
+    logits: torch.Tensor,
+    input_ids: torch.Tensor,
+    attention_mask: torch.Tensor,
+    num_perturb_samples: int = 32,
+    sigma_eps: float = 1e-6,
+) -> torch.Tensor:
+    """Compute d_c using Eq.(4)(5) with vectorized online resampling."""
+
+    if num_perturb_samples < 1:
+        raise ValueError("num_perturb_samples must be >= 1.")
+    if sigma_eps <= 0:
+        raise ValueError("sigma_eps must be > 0.")
+
+    log_probs, original_seq_logp, shift_mask = _log_probs_and_seq_sum(
+        logits=logits, input_ids=input_ids, attention_mask=attention_mask
+    )
+    batch_size = input_ids.shape[0]
+    seq_len = input_ids.shape[1] - 1
+    sample_shape = (num_perturb_samples,)
+
+    sampling_logits = log_probs
+    if log_probs.device.type == "mps":
+        # Work around an MPS segfault in torch.distributions.Categorical.sample.
+        sampling_logits = log_probs.to("cpu")
+
+    sampled_tokens = torch.distributions.Categorical(logits=sampling_logits).sample(sample_shape)
+    if sampled_tokens.device != log_probs.device:
+        sampled_tokens = sampled_tokens.to(log_probs.device)
+    sampled_tokens = sampled_tokens.view(num_perturb_samples, batch_size, seq_len)
+    expanded_log_probs = log_probs.unsqueeze(0).expand(num_perturb_samples, -1, -1, -1)
+
+    sampled_token_logp = expanded_log_probs.gather(
+        dim=-1, index=sampled_tokens.unsqueeze(-1)
+    ).squeeze(-1)
+    sampled_seq_logp = (sampled_token_logp * shift_mask.unsqueeze(0)).sum(dim=-1)
+
+    mu_tilde = sampled_seq_logp.mean(dim=0)
+    sigma_tilde = sampled_seq_logp.std(dim=0, unbiased=False)
+    dc = (original_seq_logp - mu_tilde) / (sigma_tilde + sigma_eps)
+    return dc
+
+
+def compute_dc(
+    model: torch.nn.Module,
+    input_ids: torch.Tensor,
+    attention_mask: torch.Tensor,
+    num_perturb_samples: int = 32,
+    sigma_eps: float = 1e-6,
+) -> torch.Tensor:
+    outputs = model(input_ids=input_ids, attention_mask=attention_mask, use_cache=False)
+    return compute_dc_from_logits(
+        logits=outputs.logits,
+        input_ids=input_ids,
+        attention_mask=attention_mask,
+        num_perturb_samples=num_perturb_samples,
+        sigma_eps=sigma_eps,
+    )
