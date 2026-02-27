@@ -78,6 +78,14 @@ def compute_dc(
     num_perturb_samples: int = 32,
     sigma_eps: float = 1e-6,
 ) -> torch.Tensor:
+    # Ensure input tensors are on the same device as the model to avoid
+    # "Expected all tensors to be on the same device" errors in multi-GPU/CPU setups.
+    try:
+        model_device = next(model.parameters()).device
+    except StopIteration:
+        model_device = input_ids.device
+    input_ids = input_ids.to(model_device)
+    attention_mask = attention_mask.to(model_device)
     outputs = model(input_ids=input_ids, attention_mask=attention_mask, use_cache=False)
     return compute_dc_from_logits(
         logits=outputs.logits,
