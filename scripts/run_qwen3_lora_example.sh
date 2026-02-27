@@ -14,8 +14,14 @@ if [[ -f "$ROOT_DIR/configs/qwen3_lora_mps.env" ]]; then
   source "$ROOT_DIR/configs/qwen3_lora_mps.env"
 fi
 
-if [[ ! -f "$VENV_DIR/bin/activate" ]]; then
-  echo "Virtual environment not found: $VENV_DIR"
+if [[ -f "$VENV_DIR/bin/activate" ]]; then
+  echo "[env] activating virtual environment: $VENV_DIR"
+  # shellcheck disable=SC1091
+  source "$VENV_DIR/bin/activate"
+elif python3 -c "import detectanyllm" >/dev/null 2>&1; then
+  echo "[env] using current python environment (detectanyllm detected)"
+else
+  echo "[env] virtual environment not found and 'detectanyllm' is not installed."
   echo "Run setup first: $ROOT_DIR/scripts/setup_qwen3_lora.sh"
   exit 1
 fi
@@ -37,10 +43,10 @@ if [[ ! -f "$ACCEL_CONFIG" ]]; then
   exit 1
 fi
 
-source "$VENV_DIR/bin/activate"
+# Environment already handled above
 if ! python -c "import detectanyllm" >/dev/null 2>&1; then
-  echo "Python package 'detectanyllm' is not installed in $VENV_DIR"
-  echo "Run: pip install -e \"$ROOT_DIR\""
+  echo "[env] Python package 'detectanyllm' is not installed."
+  echo "Please run: pip install -e \"$ROOT_DIR\""
   exit 1
 fi
 mkdir -p "$OUTPUT_DIR"
