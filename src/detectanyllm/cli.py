@@ -20,10 +20,11 @@ from detectanyllm.config import (
 )
 from detectanyllm.data.collator import PairDataCollator
 from detectanyllm.data.dataset import DDLPairDataset
-from detectanyllm.data.io import prepare_pairs
+from detectanyllm.data.io import prepare_pairs, split_jsonl_by_group_id, split_jsonl_random
 from detectanyllm.infer.predict import build_reference_distributions, infer_file
 from detectanyllm.infer.reference_clustering import load_reference_stats, save_reference_stats
 from detectanyllm.training.live_metrics import LiveMetricsCallback, write_live_dashboard
+from detectanyllm.training.test_eval_callback import PeriodicTestMetricsCallback
 from detectanyllm.training.trainer import DDLTrainer
 
 logger = logging.getLogger("detectanyllm")
@@ -62,9 +63,102 @@ def cmd_train(args: argparse.Namespace) -> int:
         lora_dropout=args.lora_dropout,
         target_modules=args.target_modules,
     )
+    train_pairs_file = args.train_pairs_file
+    validation_pairs_file = args.validation_pairs_file
+    test_pairs_file = args.test_pairs_file
+
+    should_auto_split = (
+        not validation_pairs_file
+        and not test_pairs_file
+        and (args.dev_ratio > 0 or args.test_ratio > 0)
+    )
+    if should_auto_split:
+        split_dir = Path(args.output_dir) / "splits"
+        if args.group_id_field:
+            try:
+                train_path, dev_path, test_path, split_info = split_jsonl_by_group_id(
+                    input_file=args.train_pairs_file,
+                    output_dir=split_dir,
+                    group_id_field=args.group_id_field,
+                    dev_ratio=args.dev_ratio,
+                    test_ratio=args.test_ratio,
+                    seed=args.split_seed,
+                )
+                train_pairs_file = train_path.as_posix()
+                validation_pairs_file = dev_path.as_posix()
+                test_pairs_file = test_path.as_posix()
+                logger.info(
+                    "Group split by '%s' complete: train=%d rows (%d groups), dev=%d rows (%d groups), test=%d rows (%d groups).",
+                    args.group_id_field,
+                    len(split_info.train_rows),
+                    len(split_info.train_groups),
+                    len(split_info.dev_rows),
+                    len(split_info.dev_groups),
+                    len(split_info.test_rows),
+                    len(split_info.test_groups),
+                )
+                logger.info(
+                    "Split files: train=%s dev=%s test=%s",
+                    train_pairs_file,
+                    validation_pairs_file,
+                    test_pairs_file,
+                )
+            except (KeyError, ValueError) as exc:
+                logger.warning(
+                    "Group split by '%s' failed (%s). Falling back to random shuffle split.",
+                    args.group_id_field,
+                    exc,
+                )
+                train_path, dev_path, test_path, split_info = split_jsonl_random(
+                    input_file=args.train_pairs_file,
+                    output_dir=split_dir,
+                    dev_ratio=args.dev_ratio,
+                    test_ratio=args.test_ratio,
+                    seed=args.split_seed,
+                )
+                train_pairs_file = train_path.as_posix()
+                validation_pairs_file = dev_path.as_posix()
+                test_pairs_file = test_path.as_posix()
+                logger.info(
+                    "Random split complete: train=%d rows, dev=%d rows, test=%d rows.",
+                    len(split_info.train_rows),
+                    len(split_info.dev_rows),
+                    len(split_info.test_rows),
+                )
+                logger.info(
+                    "Split files: train=%s dev=%s test=%s",
+                    train_pairs_file,
+                    validation_pairs_file,
+                    test_pairs_file,
+                )
+        else:
+            train_path, dev_path, test_path, split_info = split_jsonl_random(
+                input_file=args.train_pairs_file,
+                output_dir=split_dir,
+                dev_ratio=args.dev_ratio,
+                test_ratio=args.test_ratio,
+                seed=args.split_seed,
+            )
+            train_pairs_file = train_path.as_posix()
+            validation_pairs_file = dev_path.as_posix()
+            test_pairs_file = test_path.as_posix()
+            logger.info(
+                "No group-id field configured; using random shuffle split: train=%d rows, dev=%d rows, test=%d rows.",
+                len(split_info.train_rows),
+                len(split_info.dev_rows),
+                len(split_info.test_rows),
+            )
+            logger.info(
+                "Split files: train=%s dev=%s test=%s",
+                train_pairs_file,
+                validation_pairs_file,
+                test_pairs_file,
+            )
+
     data_config = DataConfig(
-        train_pairs_file=args.train_pairs_file,
-        validation_pairs_file=args.validation_pairs_file,
+        train_pairs_file=train_pairs_file,
+        validation_pairs_file=validation_pairs_file,
+        test_pairs_file=test_pairs_file,
         human_field=args.human_field,
         machine_field=args.machine_field,
         max_length=args.max_length,
@@ -112,6 +206,19 @@ def cmd_train(args: argparse.Namespace) -> int:
             human_field=data_config.human_field,
             machine_field=data_config.machine_field,
         )
+    test_dataset = None
+    if data_config.test_pairs_file:
+        test_dataset = DDLPairDataset(
+            data_file=data_config.test_pairs_file,
+            tokenizer=tokenizer,
+            max_length=data_config.max_length,
+            human_field=data_config.human_field,
+            machine_field=data_config.machine_field,
+        )
+        if eval_dataset is None:
+            raise ValueError(
+                "test_pairs_file requires a dev set (validation_pairs_file) for threshold tuning."
+            )
 
     training_args_kwargs = {
         "output_dir": runtime_config.output_dir,
@@ -159,6 +266,21 @@ def cmd_train(args: argparse.Namespace) -> int:
     trainer = DDLTrainer(**trainer_kwargs)
     live_metrics_cb = LiveMetricsCallback(runtime_config.output_dir)
     trainer.add_callback(live_metrics_cb)
+    if test_dataset is not None and args.test_eval_steps > 0:
+        trainer.add_callback(
+            PeriodicTestMetricsCallback(
+                trainer=trainer,
+                dev_dataset=eval_dataset,
+                test_dataset=test_dataset,
+                eval_steps=args.test_eval_steps,
+                threshold_objective=args.test_threshold_objective,
+            )
+        )
+    elif args.test_eval_steps > 0 and test_dataset is None:
+        logger.warning(
+            "test_eval_steps=%d is set but no test dataset is configured; periodic test metrics are disabled.",
+            args.test_eval_steps,
+        )
     logger.info("Live dashboard: %s", dashboard_path)
     logger.info("Live metrics json: %s", live_metrics_cb.metrics_path)
 
@@ -177,6 +299,16 @@ def cmd_train(args: argparse.Namespace) -> int:
         eval_metrics["eval_samples"] = len(eval_dataset)
         trainer.log_metrics("eval", eval_metrics)
         trainer.save_metrics("eval", eval_metrics)
+
+    if eval_dataset is not None and test_dataset is not None:
+        test_metrics = trainer.evaluate_test_with_dev_threshold(
+            dev_dataset=eval_dataset,
+            test_dataset=test_dataset,
+            threshold_objective=args.test_threshold_objective,
+        )
+        test_metrics["test_samples"] = len(test_dataset) * 2
+        trainer.log_metrics("test", test_metrics)
+        trainer.save_metrics("test", test_metrics)
 
     logger.info("Training complete. Adapter saved to %s", runtime_config.output_dir)
     return 0
@@ -288,6 +420,11 @@ def build_parser() -> argparse.ArgumentParser:
     train = subparsers.add_parser("train", help="Run DDL LoRA training")
     train.add_argument("--train-pairs-file", required=True)
     train.add_argument("--validation-pairs-file")
+    train.add_argument("--test-pairs-file")
+    train.add_argument("--group-id-field")
+    train.add_argument("--dev-ratio", type=float, default=0.1)
+    train.add_argument("--test-ratio", type=float, default=0.1)
+    train.add_argument("--split-seed", type=int, default=42)
     train.add_argument("--model-name-or-path", required=True)
     train.add_argument("--output-dir", required=True)
     train.add_argument("--human-field", default="human")
@@ -309,6 +446,8 @@ def build_parser() -> argparse.ArgumentParser:
     train.add_argument("--save-total-limit", type=int, default=2)
     train.add_argument("--seed", type=int, default=42)
     train.add_argument("--resume-from-checkpoint")
+    train.add_argument("--test-eval-steps", type=int, default=0)
+    train.add_argument("--test-threshold-objective", choices=["mcc", "f1"], default="mcc")
     train.add_argument("--trust-remote-code", action="store_true")
     train.add_argument("--bf16", action=argparse.BooleanOptionalAction, default=True)
     train.set_defaults(func=cmd_train)

@@ -43,6 +43,7 @@ class ModelConfig:
 class DataConfig:
     train_pairs_file: str
     validation_pairs_file: str | None = None
+    test_pairs_file: str | None = None
     human_field: str = "human"
     machine_field: str = "machine"
     text_field: str = "text"

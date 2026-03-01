@@ -152,3 +152,143 @@ def test_cli_prepare_train_build_ref_infer_chain(
         assert "cnt_h" in row
         assert "cnt_m" in row
         assert "label_pred" in row
+
+
+def test_cli_train_group_split_and_periodic_test_metrics(
+    cli_runner,
+    tiny_model_dir,
+    tmp_path,
+):
+    pair_out = tmp_path / "pairs_with_doc_id.jsonl"
+    model_out = tmp_path / "adapter_out"
+
+    _write_jsonl(
+        pair_out,
+        [
+            {"doc_id": "a", "human": "human text good", "machine": "machine text good"},
+            {"doc_id": "a", "human": "human text foo", "machine": "machine text foo"},
+            {"doc_id": "b", "human": "human sample world", "machine": "machine sample world"},
+            {"doc_id": "b", "human": "human text bar", "machine": "machine text bad"},
+            {"doc_id": "c", "human": "human good", "machine": "machine bad"},
+            {"doc_id": "c", "human": "human foo", "machine": "machine bar"},
+            {"doc_id": "d", "human": "human world", "machine": "machine world"},
+            {"doc_id": "e", "human": "human sample", "machine": "machine sample"},
+        ],
+    )
+
+    cli_runner(
+        [
+            "train",
+            "--train-pairs-file",
+            pair_out.as_posix(),
+            "--group-id-field",
+            "doc_id",
+            "--dev-ratio",
+            "0.2",
+            "--test-ratio",
+            "0.2",
+            "--split-seed",
+            "42",
+            "--test-eval-steps",
+            "1",
+            "--test-threshold-objective",
+            "mcc",
+            "--model-name-or-path",
+            tiny_model_dir.as_posix(),
+            "--output-dir",
+            model_out.as_posix(),
+            "--target-modules",
+            "c_attn,c_proj",
+            "--max-length",
+            "32",
+            "--num-train-epochs",
+            "1",
+            "--per-device-train-batch-size",
+            "1",
+            "--gradient-accumulation-steps",
+            "1",
+            "--logging-steps",
+            "1",
+            "--save-steps",
+            "5",
+            "--num-perturb-samples",
+            "4",
+            "--no-bf16",
+        ]
+    )
+
+    assert (model_out / "splits" / "train.jsonl").exists()
+    assert (model_out / "splits" / "dev.jsonl").exists()
+    assert (model_out / "splits" / "test.jsonl").exists()
+
+    live_metrics = json.loads((model_out / "training_live_metrics.json").read_text(encoding="utf-8"))
+    log_history = live_metrics.get("log_history", [])
+    assert any("test_auc" in row and "test_mcc" in row and "test_f1" in row for row in log_history)
+
+
+def test_cli_train_random_split_without_doc_id(
+    cli_runner,
+    tiny_model_dir,
+    tmp_path,
+):
+    pair_out = tmp_path / "pairs_no_doc_id.jsonl"
+    model_out = tmp_path / "adapter_out_no_doc_id"
+
+    _write_jsonl(
+        pair_out,
+        [
+            {"human": "human text good", "machine": "machine text good"},
+            {"human": "human text foo", "machine": "machine text foo"},
+            {"human": "human sample world", "machine": "machine sample world"},
+            {"human": "human text bar", "machine": "machine text bad"},
+            {"human": "human good", "machine": "machine bad"},
+            {"human": "human foo", "machine": "machine bar"},
+            {"human": "human world", "machine": "machine world"},
+            {"human": "human sample", "machine": "machine sample"},
+        ],
+    )
+
+    cli_runner(
+        [
+            "train",
+            "--train-pairs-file",
+            pair_out.as_posix(),
+            "--dev-ratio",
+            "0.2",
+            "--test-ratio",
+            "0.2",
+            "--split-seed",
+            "42",
+            "--test-eval-steps",
+            "1",
+            "--model-name-or-path",
+            tiny_model_dir.as_posix(),
+            "--output-dir",
+            model_out.as_posix(),
+            "--target-modules",
+            "c_attn,c_proj",
+            "--max-length",
+            "32",
+            "--num-train-epochs",
+            "1",
+            "--per-device-train-batch-size",
+            "1",
+            "--gradient-accumulation-steps",
+            "1",
+            "--logging-steps",
+            "1",
+            "--save-steps",
+            "5",
+            "--num-perturb-samples",
+            "4",
+            "--no-bf16",
+        ]
+    )
+
+    assert (model_out / "splits" / "train.jsonl").exists()
+    assert (model_out / "splits" / "dev.jsonl").exists()
+    assert (model_out / "splits" / "test.jsonl").exists()
+
+    live_metrics = json.loads((model_out / "training_live_metrics.json").read_text(encoding="utf-8"))
+    log_history = live_metrics.get("log_history", [])
+    assert any("test_auc" in row and "test_mcc" in row and "test_f1" in row for row in log_history)

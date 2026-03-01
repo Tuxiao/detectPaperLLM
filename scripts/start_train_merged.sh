@@ -78,16 +78,31 @@ MODEL_DIR="${MODEL_DIR:-$MODEL_DIR_DEFAULT}"
 export PYTORCH_MPS_HIGH_WATERMARK_RATIO="${PYTORCH_MPS_HIGH_WATERMARK_RATIO:-0.0}"
 export NUM_PERTURB_SAMPLES="${NUM_PERTURB_SAMPLES:-8}"
 export MAX_LENGTH="${MAX_LENGTH:-256}"
-export TRAIN_FILE="${TRAIN_FILE:-$ROOT_DIR/data/train_pairs_merged.jsonl}"
+export TRAIN_FILE="${TRAIN_FILE:-$ROOT_DIR/data/splits/train.jsonl}"
+export VALIDATION_FILE="${VALIDATION_FILE:-$ROOT_DIR/data/splits/dev.jsonl}"
+export TEST_FILE="${TEST_FILE:-$ROOT_DIR/data/splits/test.jsonl}"
 export MODEL_DIR
 export OUTPUT_DIR="${OUTPUT_DIR:-$ROOT_DIR/outputs/${OUTPUT_PREFIX_DEFAULT}-$(date +%Y%m%d_%H%M%S)}"
 export NUM_TRAIN_EPOCHS="${NUM_TRAIN_EPOCHS:-5}"
 export PER_DEVICE_TRAIN_BATCH_SIZE="${PER_DEVICE_TRAIN_BATCH_SIZE:-1}"
 export GRADIENT_ACCUMULATION_STEPS="${GRADIENT_ACCUMULATION_STEPS:-8}"
+export GROUP_ID_FIELD="${GROUP_ID_FIELD:-}"
+export DEV_RATIO="${DEV_RATIO:-0.1}"
+export TEST_RATIO="${TEST_RATIO:-0.1}"
+export SPLIT_SEED="${SPLIT_SEED:-42}"
+export TEST_EVAL_STEPS="${TEST_EVAL_STEPS:-20}"
+export TEST_THRESHOLD_OBJECTIVE="${TEST_THRESHOLD_OBJECTIVE:-mcc}"
 
 echo "[config] model preset: $MODEL_PRESET"
 echo "[config] model dir: $MODEL_DIR"
 echo "[config] output dir: $OUTPUT_DIR"
+echo "[config] train file: $TRAIN_FILE"
+echo "[config] dev file: $VALIDATION_FILE"
+echo "[config] test file: $TEST_FILE"
+if [[ -n "$GROUP_ID_FIELD" ]]; then
+  echo "[config] group-id split field: $GROUP_ID_FIELD (dev_ratio=$DEV_RATIO test_ratio=$TEST_RATIO split_seed=$SPLIT_SEED)"
+  echo "[config] periodic test eval: every $TEST_EVAL_STEPS step(s), threshold objective=$TEST_THRESHOLD_OBJECTIVE"
+fi
 
 # 自动检测 GPU 类型，选择对应的 accelerate 配置
 if [[ -z "${ACCEL_CONFIG:-}" ]]; then
