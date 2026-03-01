@@ -14,7 +14,7 @@ usage() {
 Usage: setup_qwen3_lora.sh [options]
 
 Options:
-  --model <preset>      Model preset: qwen3:0.6b (default), qwen3:8b
+  --model <preset>      Model preset: qwen3:0.6b (default), qwen3:4b, qwen3:8b
   --model-repo <repo>   Override model repo (e.g. Qwen/Qwen3-8B)
   --model-dir <path>    Override local model directory
   -h, --help            Show this help
@@ -30,6 +30,11 @@ resolve_model_preset() {
       MODEL_REPO_DEFAULT="Qwen/Qwen3-0.6B"
       MODEL_DIR_DEFAULT="$ROOT_DIR/models/Qwen3-0.6B"
       ;;
+    qwen3:4b|qwen3-4b|4b)
+      MODEL_PRESET="qwen3:4b"
+      MODEL_REPO_DEFAULT="Qwen/Qwen3-4B"
+      MODEL_DIR_DEFAULT="$ROOT_DIR/models/Qwen3-4B"
+      ;;
     qwen3:8b|qwen3-8b|8b)
       MODEL_PRESET="qwen3:8b"
       MODEL_REPO_DEFAULT="Qwen/Qwen3-8B"
@@ -37,7 +42,7 @@ resolve_model_preset() {
       ;;
     *)
       echo "Unsupported model preset: $1"
-      echo "Supported presets: qwen3:0.6b, qwen3:8b"
+      echo "Supported presets: qwen3:0.6b, qwen3:4b, qwen3:8b"
       exit 1
       ;;
   esac

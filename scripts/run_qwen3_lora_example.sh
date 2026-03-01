@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VENV_DIR="${VENV_DIR:-$ROOT_DIR/.venv}"
 MODEL_DIR="${MODEL_DIR:-$ROOT_DIR/models/Qwen3-0.6B}"
+MODEL_REPO="${MODEL_REPO:-}"
 TRAIN_FILE="${TRAIN_FILE:-$ROOT_DIR/data/train_pairs.sample.jsonl}"
 VALIDATION_FILE="${VALIDATION_FILE:-}"
 TEST_FILE="${TEST_FILE:-}"
@@ -25,6 +26,87 @@ model_is_ready() {
     || compgen -G "$dir/model-*.safetensors" > /dev/null
 }
 
+infer_model_repo_from_dir() {
+  local dir="$1"
+  case "$(basename "$dir")" in
+    Qwen3-0.6B) echo "Qwen/Qwen3-0.6B" ;;
+    Qwen3-4B) echo "Qwen/Qwen3-4B" ;;
+    Qwen3-8B) echo "Qwen/Qwen3-8B" ;;
+    *) echo "" ;;
+  esac
+}
+
+download_model_if_missing() {
+  local dir="$1"
+  local repo="$2"
+  if model_is_ready "$dir"; then
+    return 0
+  fi
+
+  if [[ -z "$repo" ]]; then
+    repo="$(infer_model_repo_from_dir "$dir")"
+  fi
+  if [[ -z "$repo" ]]; then
+    echo "Model weights not found in: $dir"
+    echo "Cannot infer model repo automatically. Please set MODEL_REPO or pass --model-repo."
+    return 1
+  fi
+
+  echo "[model] weights not found in $dir"
+  echo "[model] auto-downloading $repo ..."
+  mkdir -p "$dir"
+
+  # Prefer ModelScope (common in mainland China). If unavailable/fails, fallback to HF mirror.
+  if python - "$repo" "$dir" <<'PY'
+import importlib.util
+import sys
+
+repo = sys.argv[1]
+local_dir = sys.argv[2]
+
+if importlib.util.find_spec("modelscope") is None:
+    raise SystemExit(2)
+
+from modelscope import snapshot_download
+
+snapshot_download(repo, local_dir=local_dir)
+print("ModelScope download complete.")
+PY
+  then
+    return 0
+  else
+    code=$?
+    if [[ "$code" -eq 2 ]]; then
+      echo "[model] modelscope not installed, fallback to Hugging Face."
+    else
+      echo "[model] modelscope download failed (exit=$code), fallback to Hugging Face."
+    fi
+  fi
+
+  export HF_ENDPOINT="${HF_ENDPOINT:-https://hf-mirror.com}"
+  if ! python - "$repo" "$dir" <<'PY'
+import sys
+from huggingface_hub import snapshot_download
+
+repo = sys.argv[1]
+local_dir = sys.argv[2]
+
+snapshot_download(
+    repo_id=repo,
+    local_dir=local_dir,
+    local_dir_use_symlinks=False,
+    resume_download=True,
+)
+print("Hugging Face download complete.")
+PY
+  then
+    echo "[model] Hugging Face download failed for $repo."
+    return 1
+  fi
+
+  model_is_ready "$dir"
+}
+
 if [[ -f "$ROOT_DIR/configs/qwen3_lora_mps.env" ]]; then
   # shellcheck disable=SC1091
   source "$ROOT_DIR/configs/qwen3_lora_mps.env"
@@ -42,9 +124,9 @@ else
   exit 1
 fi
 
-if ! model_is_ready "$MODEL_DIR"; then
-  echo "Model weights not found in: $MODEL_DIR"
-  echo "Run setup first: $ROOT_DIR/scripts/setup_qwen3_lora.sh"
+if ! download_model_if_missing "$MODEL_DIR" "$MODEL_REPO"; then
+  echo "Model not ready after auto-download attempts."
+  echo "Try: MODEL_REPO=Qwen/Qwen3-4B bash scripts/start_train_merged.sh --model qwen3:4b"
   exit 1
 fi
 

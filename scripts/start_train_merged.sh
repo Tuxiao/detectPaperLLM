@@ -6,6 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 MODEL_PRESET="${MODEL_PRESET:-qwen3:0.6b}"
 MODEL_DIR="${MODEL_DIR:-}"
+MODEL_REPO="${MODEL_REPO:-}"
 RESUME_FROM_CHECKPOINT="${RESUME_FROM_CHECKPOINT:-}"
 
 usage() {
@@ -13,7 +14,8 @@ usage() {
 Usage: start_train_merged.sh [options]
 
 Options:
-  --model <preset>    Model preset: qwen3:0.6b (default), qwen3:8b
+  --model <preset>    Model preset: qwen3:0.6b (default), qwen3:4b, qwen3:8b
+  --model-repo <repo> Override model repo (e.g. Qwen/Qwen3-4B)
   --model-dir <path>  Override local model directory
   --resume-from-checkpoint <path>  Resume from a trainer checkpoint directory
   -h, --help          Show this help
@@ -26,17 +28,25 @@ resolve_model_preset() {
   case "$preset" in
     qwen3:0.6b|qwen3-0.6b|0.6b)
       MODEL_PRESET="qwen3:0.6b"
+      MODEL_REPO_DEFAULT="Qwen/Qwen3-0.6B"
       MODEL_DIR_DEFAULT="$ROOT_DIR/models/Qwen3-0.6B"
       OUTPUT_PREFIX_DEFAULT="qwen3-0.6b-lora"
       ;;
+    qwen3:4b|qwen3-4b|4b)
+      MODEL_PRESET="qwen3:4b"
+      MODEL_REPO_DEFAULT="Qwen/Qwen3-4B"
+      MODEL_DIR_DEFAULT="$ROOT_DIR/models/Qwen3-4B"
+      OUTPUT_PREFIX_DEFAULT="qwen3-4b-lora"
+      ;;
     qwen3:8b|qwen3-8b|8b)
       MODEL_PRESET="qwen3:8b"
+      MODEL_REPO_DEFAULT="Qwen/Qwen3-8B"
       MODEL_DIR_DEFAULT="$ROOT_DIR/models/Qwen3-8B"
       OUTPUT_PREFIX_DEFAULT="qwen3-8b-lora"
       ;;
     *)
       echo "Unsupported model preset: $1"
-      echo "Supported presets: qwen3:0.6b, qwen3:8b"
+      echo "Supported presets: qwen3:0.6b, qwen3:4b, qwen3:8b"
       exit 1
       ;;
   esac
@@ -62,6 +72,15 @@ while [[ $# -gt 0 ]]; do
       MODEL_DIR="${1#*=}"
       shift
       ;;
+    --model-repo)
+      [[ $# -lt 2 ]] && { echo "Missing value for --model-repo"; usage; exit 1; }
+      MODEL_REPO="$2"
+      shift 2
+      ;;
+    --model-repo=*)
+      MODEL_REPO="${1#*=}"
+      shift
+      ;;
     --resume-from-checkpoint)
       [[ $# -lt 2 ]] && { echo "Missing value for --resume-from-checkpoint"; usage; exit 1; }
       RESUME_FROM_CHECKPOINT="$2"
@@ -84,6 +103,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 resolve_model_preset "$MODEL_PRESET"
+MODEL_REPO="${MODEL_REPO:-$MODEL_REPO_DEFAULT}"
 MODEL_DIR="${MODEL_DIR:-$MODEL_DIR_DEFAULT}"
 
 export PYTORCH_MPS_HIGH_WATERMARK_RATIO="${PYTORCH_MPS_HIGH_WATERMARK_RATIO:-0.0}"
@@ -93,6 +113,7 @@ export TRAIN_FILE="${TRAIN_FILE:-$ROOT_DIR/data/splits/train.jsonl}"
 export VALIDATION_FILE="${VALIDATION_FILE:-$ROOT_DIR/data/splits/dev.jsonl}"
 export TEST_FILE="${TEST_FILE:-$ROOT_DIR/data/splits/test.jsonl}"
 export MODEL_DIR
+export MODEL_REPO
 export OUTPUT_DIR="${OUTPUT_DIR:-$ROOT_DIR/outputs/${OUTPUT_PREFIX_DEFAULT}-$(date +%Y%m%d_%H%M%S)}"
 export NUM_TRAIN_EPOCHS="${NUM_TRAIN_EPOCHS:-5}"
 export PER_DEVICE_TRAIN_BATCH_SIZE="${PER_DEVICE_TRAIN_BATCH_SIZE:-1}"
@@ -106,6 +127,7 @@ export TEST_THRESHOLD_OBJECTIVE="${TEST_THRESHOLD_OBJECTIVE:-mcc}"
 export RESUME_FROM_CHECKPOINT
 
 echo "[config] model preset: $MODEL_PRESET"
+echo "[config] model repo: $MODEL_REPO"
 echo "[config] model dir: $MODEL_DIR"
 echo "[config] output dir: $OUTPUT_DIR"
 echo "[config] train file: $TRAIN_FILE"
