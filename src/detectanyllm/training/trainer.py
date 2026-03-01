@@ -116,6 +116,30 @@ class DDLTrainer(Trainer):
             "test_f1": test_metrics["f1"],
         }
 
+    def evaluate_dev_split(
+        self,
+        dev_dataset: Dataset,
+        threshold_objective: str = "mcc",
+    ) -> dict[str, float]:
+        dev_scores, dev_labels = self.collect_discrepancy_scores(dev_dataset)
+        dev_threshold, dev_best_metric = choose_threshold_from_dev(
+            scores=dev_scores,
+            labels=dev_labels,
+            objective=threshold_objective,
+        )
+        metrics = metrics_at_threshold(
+            scores=dev_scores,
+            labels=dev_labels,
+            threshold=dev_threshold,
+        )
+        return {
+            "dev_auc": metrics["auc"],
+            "dev_mcc": metrics["mcc"],
+            "dev_f1": metrics["f1"],
+            "dev_threshold": dev_threshold,
+            f"dev_best_{threshold_objective}": dev_best_metric,
+        }
+
     def compute_loss(
         self,
         model: torch.nn.Module,

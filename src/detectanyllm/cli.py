@@ -237,14 +237,14 @@ def cmd_train(args: argparse.Namespace) -> int:
         "bf16": bf16_enabled,
         "seed": runtime_config.seed,
     }
-    eval_strategy = "steps" if eval_dataset is not None else "no"
+    # Pair batches (human/machine tensors) are incompatible with the default
+    # Trainer evaluation loop, so we always use custom metric evaluation.
+    eval_strategy = "no"
     training_args_params = inspect.signature(TrainingArguments.__init__).parameters
     if "evaluation_strategy" in training_args_params:
         training_args_kwargs["evaluation_strategy"] = eval_strategy
     elif "eval_strategy" in training_args_params:
         training_args_kwargs["eval_strategy"] = eval_strategy
-    if eval_dataset is not None:
-        training_args_kwargs["eval_steps"] = runtime_config.save_steps
     training_args = TrainingArguments(**training_args_kwargs)
 
     trainer_kwargs = {
@@ -295,10 +295,13 @@ def cmd_train(args: argparse.Namespace) -> int:
     trainer.save_state()
 
     if eval_dataset is not None:
-        eval_metrics = trainer.evaluate()
-        eval_metrics["eval_samples"] = len(eval_dataset)
-        trainer.log_metrics("eval", eval_metrics)
-        trainer.save_metrics("eval", eval_metrics)
+        dev_metrics = trainer.evaluate_dev_split(
+            dev_dataset=eval_dataset,
+            threshold_objective=args.test_threshold_objective,
+        )
+        dev_metrics["eval_samples"] = len(eval_dataset) * 2
+        trainer.log_metrics("eval", dev_metrics)
+        trainer.save_metrics("eval", dev_metrics)
 
     if eval_dataset is not None and test_dataset is not None:
         test_metrics = trainer.evaluate_test_with_dev_threshold(
