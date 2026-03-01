@@ -26,10 +26,10 @@ def parse_target_modules(target_modules: str | Sequence[str]) -> list[str]:
 class ModelConfig:
     model_name_or_path: str
     trust_remote_code: bool = False
-    lora_r: int = 8
+    lora_r: int = 16
     lora_alpha: int = 32
     lora_dropout: float = 0.1
-    target_modules: str = "q_proj,v_proj"
+    target_modules: str = "q_proj,k_proj,v_proj,o_proj"
 
     def __post_init__(self) -> None:
         _require_positive("lora_r", self.lora_r)
