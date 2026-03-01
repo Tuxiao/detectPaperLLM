@@ -7,6 +7,7 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 MODEL_PRESET="${MODEL_PRESET:-qwen3:0.6b}"
 MODEL_DIR="${MODEL_DIR:-}"
 MODEL_REPO="${MODEL_REPO:-}"
+DATA_DIR="${DATA_DIR:-}"
 RESUME_FROM_CHECKPOINT="${RESUME_FROM_CHECKPOINT:-}"
 
 usage() {
@@ -17,6 +18,7 @@ Options:
   --model <preset>    Model preset: qwen3:0.6b (default), qwen3:4b, qwen3:8b
   --model-repo <repo> Override model repo (e.g. Qwen/Qwen3-4B)
   --model-dir <path>  Override local model directory
+  --data-dir <path>   Data directory containing train.jsonl / dev.jsonl / test.jsonl
   --resume-from-checkpoint <path>  Resume from a trainer checkpoint directory
   -h, --help          Show this help
 EOF
@@ -81,6 +83,15 @@ while [[ $# -gt 0 ]]; do
       MODEL_REPO="${1#*=}"
       shift
       ;;
+    --data-dir)
+      [[ $# -lt 2 ]] && { echo "Missing value for --data-dir"; usage; exit 1; }
+      DATA_DIR="$2"
+      shift 2
+      ;;
+    --data-dir=*)
+      DATA_DIR="${1#*=}"
+      shift
+      ;;
     --resume-from-checkpoint)
       [[ $# -lt 2 ]] && { echo "Missing value for --resume-from-checkpoint"; usage; exit 1; }
       RESUME_FROM_CHECKPOINT="$2"
@@ -109,9 +120,10 @@ MODEL_DIR="${MODEL_DIR:-$MODEL_DIR_DEFAULT}"
 export PYTORCH_MPS_HIGH_WATERMARK_RATIO="${PYTORCH_MPS_HIGH_WATERMARK_RATIO:-0.0}"
 export NUM_PERTURB_SAMPLES="${NUM_PERTURB_SAMPLES:-8}"
 export MAX_LENGTH="${MAX_LENGTH:-256}"
-export TRAIN_FILE="${TRAIN_FILE:-$ROOT_DIR/data/splits/train.jsonl}"
-export VALIDATION_FILE="${VALIDATION_FILE:-$ROOT_DIR/data/splits/dev.jsonl}"
-export TEST_FILE="${TEST_FILE:-$ROOT_DIR/data/splits/test.jsonl}"
+_DEFAULT_SPLITS_DIR="${DATA_DIR:-$ROOT_DIR/data/splits}"
+export TRAIN_FILE="${TRAIN_FILE:-$_DEFAULT_SPLITS_DIR/train.jsonl}"
+export VALIDATION_FILE="${VALIDATION_FILE:-$_DEFAULT_SPLITS_DIR/dev.jsonl}"
+export TEST_FILE="${TEST_FILE:-$_DEFAULT_SPLITS_DIR/test.jsonl}"
 export MODEL_DIR
 export MODEL_REPO
 export OUTPUT_DIR="${OUTPUT_DIR:-$ROOT_DIR/outputs/${OUTPUT_PREFIX_DEFAULT}-$(date +%Y%m%d_%H%M%S)}"

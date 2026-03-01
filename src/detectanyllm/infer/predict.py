@@ -11,6 +11,14 @@ from detectanyllm.infer.reference_clustering import build_reference_stats, estim
 from detectanyllm.training.discrepancy import compute_dc
 
 
+def _resolve_device() -> torch.device:
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
+
+
 def _encode_text(tokenizer, text: str, max_length: int, device: torch.device) -> tuple[torch.Tensor, torch.Tensor]:
     encoded = tokenizer(
         text,
@@ -60,7 +68,7 @@ def build_reference_distributions(
     device: torch.device | None = None,
     meta: dict | None = None,
 ) -> dict:
-    device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = device or _resolve_device()
 
     d_h: list[float] = []
     d_m: list[float] = []
@@ -111,7 +119,7 @@ def infer_file(
     k_neighbors: int = 100,
     device: torch.device | None = None,
 ) -> list[dict]:
-    device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = device or _resolve_device()
     records_out: list[dict] = []
 
     if decision_mode == "pm" and ref_stats is None:

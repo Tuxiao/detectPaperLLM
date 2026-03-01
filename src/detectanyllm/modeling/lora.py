@@ -18,6 +18,44 @@ def _preferred_dtype(use_bf16: bool) -> torch.dtype | None:
     return None
 
 
+def _resolve_device() -> torch.device:
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
+
+
+def _resolve_base_model(adapter_path: Path, base_model: str | None) -> str:
+    if base_model:
+        return base_model
+
+    adapter_config_path = adapter_path / "adapter_config.json"
+    if not adapter_config_path.exists():
+        raise ValueError(
+            "base_model is required when adapter_config.json is missing from adapter_path."
+        )
+
+    with adapter_config_path.open("r", encoding="utf-8") as handle:
+        adapter_cfg = json.load(handle)
+    resolved_base = adapter_cfg.get("base_model_name_or_path")
+    if not resolved_base:
+        raise ValueError("Could not resolve base model from adapter config.")
+    return resolved_base
+
+
+def _has_local_tokenizer(model_path: Path) -> bool:
+    return any(
+        (model_path / name).exists()
+        for name in (
+            "tokenizer_config.json",
+            "tokenizer.json",
+            "vocab.json",
+            "spiece.model",
+        )
+    )
+
+
 def load_tokenizer(model_name_or_path: str, trust_remote_code: bool = False):
     tokenizer = AutoTokenizer.from_pretrained(
         model_name_or_path, trust_remote_code=trust_remote_code
@@ -94,7 +132,45 @@ def load_model_for_inference(
     tokenizer = load_tokenizer(tokenizer_source, trust_remote_code=trust_remote_code)
     model.config.use_cache = False
     model.config.pad_token_id = tokenizer.pad_token_id
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = _resolve_device()
     model.to(device)
     model.eval()
     return model, tokenizer, device
+
+
+def merge_lora_adapter(
+    adapter_path: str,
+    output_dir: str,
+    base_model: str | None = None,
+    trust_remote_code: bool = False,
+    use_bf16: bool = True,
+    safe_serialization: bool = True,
+) -> tuple[str, str]:
+    adapter_path_obj = Path(adapter_path)
+    if not adapter_path_obj.exists():
+        raise FileNotFoundError(f"adapter_path does not exist: {adapter_path}")
+
+    resolved_base = _resolve_base_model(adapter_path_obj, base_model)
+
+    base = AutoModelForCausalLM.from_pretrained(
+        resolved_base,
+        trust_remote_code=trust_remote_code,
+        torch_dtype=_preferred_dtype(use_bf16),
+    )
+    lora_model = PeftModel.from_pretrained(base, adapter_path)
+    merged_model = lora_model.merge_and_unload()
+
+    output_dir_obj = Path(output_dir)
+    output_dir_obj.mkdir(parents=True, exist_ok=True)
+    merged_model.save_pretrained(
+        output_dir_obj.as_posix(),
+        safe_serialization=safe_serialization,
+    )
+
+    tokenizer_source = (
+        adapter_path_obj.as_posix() if _has_local_tokenizer(adapter_path_obj) else resolved_base
+    )
+    tokenizer = load_tokenizer(tokenizer_source, trust_remote_code=trust_remote_code)
+    tokenizer.save_pretrained(output_dir_obj.as_posix())
+
+    return resolved_base, output_dir_obj.as_posix()

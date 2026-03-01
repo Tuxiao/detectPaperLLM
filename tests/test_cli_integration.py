@@ -5,6 +5,7 @@ import importlib.util
 from pathlib import Path
 
 import pytest
+from transformers import AutoModelForCausalLM
 
 pytestmark = pytest.mark.skipif(
     importlib.util.find_spec("peft") is None, reason="peft not installed"
@@ -292,3 +293,76 @@ def test_cli_train_random_split_without_doc_id(
     live_metrics = json.loads((model_out / "training_live_metrics.json").read_text(encoding="utf-8"))
     log_history = live_metrics.get("log_history", [])
     assert any("test_auc" in row and "test_mcc" in row and "test_f1" in row for row in log_history)
+
+
+def test_cli_merge_lora_exports_full_model(
+    cli_runner,
+    tiny_model_dir,
+    tmp_path,
+):
+    pair_out = tmp_path / "pairs.jsonl"
+    adapter_out = tmp_path / "adapter_out"
+    merged_out = tmp_path / "merged_out"
+
+    _write_jsonl(
+        pair_out,
+        [
+            {"human": "human text good", "machine": "machine text good"},
+            {"human": "human text foo", "machine": "machine text foo"},
+            {"human": "human sample world", "machine": "machine sample world"},
+            {"human": "human bar", "machine": "machine bad"},
+        ],
+    )
+
+    cli_runner(
+        [
+            "train",
+            "--train-pairs-file",
+            pair_out.as_posix(),
+            "--dev-ratio",
+            "0",
+            "--test-ratio",
+            "0",
+            "--model-name-or-path",
+            tiny_model_dir.as_posix(),
+            "--output-dir",
+            adapter_out.as_posix(),
+            "--target-modules",
+            "c_attn,c_proj",
+            "--max-length",
+            "32",
+            "--num-train-epochs",
+            "1",
+            "--per-device-train-batch-size",
+            "1",
+            "--gradient-accumulation-steps",
+            "1",
+            "--logging-steps",
+            "1",
+            "--save-steps",
+            "2",
+            "--num-perturb-samples",
+            "4",
+            "--no-bf16",
+        ]
+    )
+    assert (adapter_out / "adapter_config.json").exists()
+
+    cli_runner(
+        [
+            "merge-lora",
+            "--adapter-path",
+            adapter_out.as_posix(),
+            "--base-model",
+            tiny_model_dir.as_posix(),
+            "--output-dir",
+            merged_out.as_posix(),
+            "--no-bf16",
+            "--safe-serialization",
+        ]
+    )
+
+    assert (merged_out / "config.json").exists()
+    assert (merged_out / "tokenizer_config.json").exists()
+    assert (merged_out / "model.safetensors").exists()
+    AutoModelForCausalLM.from_pretrained(merged_out.as_posix())

@@ -405,6 +405,26 @@ def cmd_infer(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_merge_lora(args: argparse.Namespace) -> int:
+    from detectanyllm.modeling.lora import merge_lora_adapter
+
+    resolved_base, output_dir = merge_lora_adapter(
+        adapter_path=args.adapter_path,
+        output_dir=args.output_dir,
+        base_model=args.base_model,
+        trust_remote_code=args.trust_remote_code,
+        use_bf16=args.bf16,
+        safe_serialization=args.safe_serialization,
+    )
+    logger.info(
+        "Merged LoRA adapter %s into base %s and saved full model to %s",
+        args.adapter_path,
+        resolved_base,
+        output_dir,
+    )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="DetectAnyLLM DDL toolkit")
     parser.add_argument("--verbose", action="store_true")
@@ -488,6 +508,20 @@ def build_parser() -> argparse.ArgumentParser:
     infer.add_argument("--trust-remote-code", action="store_true")
     infer.add_argument("--bf16", action=argparse.BooleanOptionalAction, default=True)
     infer.set_defaults(func=cmd_infer)
+
+    merge_lora = subparsers.add_parser(
+        "merge-lora",
+        help="Merge a LoRA adapter into a base model and export full weights",
+    )
+    merge_lora.add_argument("--adapter-path", required=True)
+    merge_lora.add_argument("--output-dir", required=True)
+    merge_lora.add_argument("--base-model")
+    merge_lora.add_argument("--trust-remote-code", action="store_true")
+    merge_lora.add_argument("--bf16", action=argparse.BooleanOptionalAction, default=True)
+    merge_lora.add_argument(
+        "--safe-serialization", action=argparse.BooleanOptionalAction, default=True
+    )
+    merge_lora.set_defaults(func=cmd_merge_lora)
 
     return parser
 
