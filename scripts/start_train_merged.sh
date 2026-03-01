@@ -6,6 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 MODEL_PRESET="${MODEL_PRESET:-qwen3:0.6b}"
 MODEL_DIR="${MODEL_DIR:-}"
+RESUME_FROM_CHECKPOINT="${RESUME_FROM_CHECKPOINT:-}"
 
 usage() {
   cat <<'EOF'
@@ -14,6 +15,7 @@ Usage: start_train_merged.sh [options]
 Options:
   --model <preset>    Model preset: qwen3:0.6b (default), qwen3:8b
   --model-dir <path>  Override local model directory
+  --resume-from-checkpoint <path>  Resume from a trainer checkpoint directory
   -h, --help          Show this help
 EOF
 }
@@ -60,6 +62,15 @@ while [[ $# -gt 0 ]]; do
       MODEL_DIR="${1#*=}"
       shift
       ;;
+    --resume-from-checkpoint)
+      [[ $# -lt 2 ]] && { echo "Missing value for --resume-from-checkpoint"; usage; exit 1; }
+      RESUME_FROM_CHECKPOINT="$2"
+      shift 2
+      ;;
+    --resume-from-checkpoint=*)
+      RESUME_FROM_CHECKPOINT="${1#*=}"
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -92,6 +103,7 @@ export TEST_RATIO="${TEST_RATIO:-0.1}"
 export SPLIT_SEED="${SPLIT_SEED:-42}"
 export TEST_EVAL_STEPS="${TEST_EVAL_STEPS:-20}"
 export TEST_THRESHOLD_OBJECTIVE="${TEST_THRESHOLD_OBJECTIVE:-mcc}"
+export RESUME_FROM_CHECKPOINT
 
 echo "[config] model preset: $MODEL_PRESET"
 echo "[config] model dir: $MODEL_DIR"
@@ -99,6 +111,9 @@ echo "[config] output dir: $OUTPUT_DIR"
 echo "[config] train file: $TRAIN_FILE"
 echo "[config] dev file: $VALIDATION_FILE"
 echo "[config] test file: $TEST_FILE"
+if [[ -n "$RESUME_FROM_CHECKPOINT" ]]; then
+  echo "[config] resume checkpoint: $RESUME_FROM_CHECKPOINT"
+fi
 if [[ -n "$GROUP_ID_FIELD" ]]; then
   echo "[config] group-id split field: $GROUP_ID_FIELD (dev_ratio=$DEV_RATIO test_ratio=$TEST_RATIO split_seed=$SPLIT_SEED)"
   echo "[config] periodic test eval: every $TEST_EVAL_STEPS step(s), threshold objective=$TEST_THRESHOLD_OBJECTIVE"

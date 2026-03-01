@@ -16,6 +16,7 @@ TEST_RATIO="${TEST_RATIO:-0.1}"
 SPLIT_SEED="${SPLIT_SEED:-42}"
 TEST_EVAL_STEPS="${TEST_EVAL_STEPS:-20}"
 TEST_THRESHOLD_OBJECTIVE="${TEST_THRESHOLD_OBJECTIVE:-mcc}"
+RESUME_FROM_CHECKPOINT="${RESUME_FROM_CHECKPOINT:-}"
 
 model_is_ready() {
   local dir="$1"
@@ -59,6 +60,10 @@ if [[ -n "$TEST_FILE" && ! -f "$TEST_FILE" ]]; then
   echo "Test data not found: $TEST_FILE"
   exit 1
 fi
+if [[ -n "$RESUME_FROM_CHECKPOINT" && ! -d "$RESUME_FROM_CHECKPOINT" ]]; then
+  echo "Checkpoint directory not found: $RESUME_FROM_CHECKPOINT"
+  exit 1
+fi
 
 if [[ ! -f "$ACCEL_CONFIG" ]]; then
   echo "Accelerate config not found: $ACCEL_CONFIG"
@@ -81,6 +86,9 @@ if [[ -n "$VALIDATION_FILE" ]]; then
 fi
 if [[ -n "$TEST_FILE" ]]; then
   echo "[train] test file: $TEST_FILE"
+fi
+if [[ -n "$RESUME_FROM_CHECKPOINT" ]]; then
+  echo "[train] resume from checkpoint: $RESUME_FROM_CHECKPOINT"
 fi
 echo "[train] output dir: $OUTPUT_DIR"
 echo "[train] accelerate config: $ACCEL_CONFIG"
@@ -121,6 +129,9 @@ if [[ -n "$VALIDATION_FILE" ]]; then
 fi
 if [[ -n "$TEST_FILE" ]]; then
   train_cmd+=(--test-pairs-file "$TEST_FILE")
+fi
+if [[ -n "$RESUME_FROM_CHECKPOINT" ]]; then
+  train_cmd+=(--resume-from-checkpoint "$RESUME_FROM_CHECKPOINT")
 fi
 
 "${train_cmd[@]}"
