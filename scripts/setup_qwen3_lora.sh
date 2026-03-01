@@ -4,9 +4,100 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 VENV_DIR="${VENV_DIR:-$ROOT_DIR/.venv}"
-MODEL_REPO="${MODEL_REPO:-Qwen/Qwen3-0.6B}"
-MODEL_DIR="${MODEL_DIR:-$ROOT_DIR/models/Qwen3-0.6B}"
 ACCEL_CONFIG="${ACCEL_CONFIG:-$ROOT_DIR/configs/accelerate_mps.yaml}"
+MODEL_PRESET="${MODEL_PRESET:-qwen3:0.6b}"
+MODEL_REPO="${MODEL_REPO:-}"
+MODEL_DIR="${MODEL_DIR:-}"
+
+usage() {
+  cat <<'EOF'
+Usage: setup_qwen3_lora.sh [options]
+
+Options:
+  --model <preset>      Model preset: qwen3:0.6b (default), qwen3:8b
+  --model-repo <repo>   Override model repo (e.g. Qwen/Qwen3-8B)
+  --model-dir <path>    Override local model directory
+  -h, --help            Show this help
+EOF
+}
+
+resolve_model_preset() {
+  local preset
+  preset="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+  case "$preset" in
+    qwen3:0.6b|qwen3-0.6b|0.6b)
+      MODEL_PRESET="qwen3:0.6b"
+      MODEL_REPO_DEFAULT="Qwen/Qwen3-0.6B"
+      MODEL_DIR_DEFAULT="$ROOT_DIR/models/Qwen3-0.6B"
+      ;;
+    qwen3:8b|qwen3-8b|8b)
+      MODEL_PRESET="qwen3:8b"
+      MODEL_REPO_DEFAULT="Qwen/Qwen3-8B"
+      MODEL_DIR_DEFAULT="$ROOT_DIR/models/Qwen3-8B"
+      ;;
+    *)
+      echo "Unsupported model preset: $1"
+      echo "Supported presets: qwen3:0.6b, qwen3:8b"
+      exit 1
+      ;;
+  esac
+}
+
+model_is_ready() {
+  local dir="$1"
+  [[ -f "$dir/model.safetensors" ]] \
+    || [[ -f "$dir/model.safetensors.index.json" ]] \
+    || compgen -G "$dir/model-*.safetensors" > /dev/null
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --model)
+      [[ $# -lt 2 ]] && { echo "Missing value for --model"; usage; exit 1; }
+      MODEL_PRESET="$2"
+      shift 2
+      ;;
+    --model=*)
+      MODEL_PRESET="${1#*=}"
+      shift
+      ;;
+    --model-repo)
+      [[ $# -lt 2 ]] && { echo "Missing value for --model-repo"; usage; exit 1; }
+      MODEL_REPO="$2"
+      shift 2
+      ;;
+    --model-repo=*)
+      MODEL_REPO="${1#*=}"
+      shift
+      ;;
+    --model-dir)
+      [[ $# -lt 2 ]] && { echo "Missing value for --model-dir"; usage; exit 1; }
+      MODEL_DIR="$2"
+      shift 2
+      ;;
+    --model-dir=*)
+      MODEL_DIR="${1#*=}"
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1"
+      usage
+      exit 1
+      ;;
+  esac
+done
+
+resolve_model_preset "$MODEL_PRESET"
+MODEL_REPO="${MODEL_REPO:-$MODEL_REPO_DEFAULT}"
+MODEL_DIR="${MODEL_DIR:-$MODEL_DIR_DEFAULT}"
+
+echo "[config] model preset: $MODEL_PRESET"
+echo "[config] model repo: $MODEL_REPO"
+echo "[config] model dir: $MODEL_DIR"
 
 if [[ ! -d "$VENV_DIR" ]]; then
   echo "[1/5] Creating virtual environment at $VENV_DIR"
@@ -23,7 +114,7 @@ python -m pip install -r "$ROOT_DIR/requirements.txt"
 python -m pip install -e "$ROOT_DIR"
 python -m pip install "huggingface_hub>=0.26" "modelscope"
 
-if [[ -f "$MODEL_DIR/model.safetensors" ]]; then
+if model_is_ready "$MODEL_DIR"; then
   echo "[3/5] Model already present: $MODEL_DIR"
 else
   echo "[3/5] Downloading model $MODEL_REPO to $MODEL_DIR"

@@ -9,6 +9,13 @@ OUTPUT_DIR="${OUTPUT_DIR:-$ROOT_DIR/outputs/qwen3-0.6b-lora}"
 ACCEL_CONFIG="${ACCEL_CONFIG:-$ROOT_DIR/configs/accelerate_mps.yaml}"
 TARGET_MODULES="${TARGET_MODULES:-q_proj,v_proj}"
 
+model_is_ready() {
+  local dir="$1"
+  [[ -f "$dir/model.safetensors" ]] \
+    || [[ -f "$dir/model.safetensors.index.json" ]] \
+    || compgen -G "$dir/model-*.safetensors" > /dev/null
+}
+
 if [[ -f "$ROOT_DIR/configs/qwen3_lora_mps.env" ]]; then
   # shellcheck disable=SC1091
   source "$ROOT_DIR/configs/qwen3_lora_mps.env"
@@ -26,7 +33,7 @@ else
   exit 1
 fi
 
-if [[ ! -f "$MODEL_DIR/model.safetensors" ]]; then
+if ! model_is_ready "$MODEL_DIR"; then
   echo "Model weights not found in: $MODEL_DIR"
   echo "Run setup first: $ROOT_DIR/scripts/setup_qwen3_lora.sh"
   exit 1
