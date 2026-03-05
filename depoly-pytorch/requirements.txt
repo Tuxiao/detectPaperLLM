@@ -1,0 +1,8 @@
+# Inference-only dependencies for DetectAnyLLM PyTorch serving.
+# No vLLM required.
+torch>=2.2
+transformers>=4.44
+peft>=0.11
+sentencepiece>=0.2
+fastapi>=0.110
+uvicorn[standard]>=0.27

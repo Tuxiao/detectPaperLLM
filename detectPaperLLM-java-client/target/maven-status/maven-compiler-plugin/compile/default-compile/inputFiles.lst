@@ -1,0 +1,10 @@
+/Users/craig/detectPaperLLM/detectPaperLLM-java-client/src/main/java/com/detectanyllm/client/AccuracyEvaluator.java
+/Users/craig/detectPaperLLM/detectPaperLLM-java-client/src/main/java/com/detectanyllm/client/DetectAnyLLMClient.java
+/Users/craig/detectPaperLLM/detectPaperLLM-java-client/src/main/java/com/detectanyllm/client/Main.java
+/Users/craig/detectPaperLLM/detectPaperLLM-java-client/src/main/java/com/detectanyllm/client/judge/DetectionJudge.java
+/Users/craig/detectPaperLLM/detectPaperLLM-java-client/src/main/java/com/detectanyllm/client/judge/DetectionVerdict.java
+/Users/craig/detectPaperLLM/detectPaperLLM-java-client/src/main/java/com/detectanyllm/client/judge/RiskLevel.java
+/Users/craig/detectPaperLLM/detectPaperLLM-java-client/src/main/java/com/detectanyllm/client/model/HealthResponse.java
+/Users/craig/detectPaperLLM/detectPaperLLM-java-client/src/main/java/com/detectanyllm/client/model/PredictRequest.java
+/Users/craig/detectPaperLLM/detectPaperLLM-java-client/src/main/java/com/detectanyllm/client/model/PredictResponse.java
+/Users/craig/detectPaperLLM/detectPaperLLM-java-client/src/main/java/com/detectanyllm/client/model/PredictionResult.java

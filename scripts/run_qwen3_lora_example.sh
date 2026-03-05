@@ -3,12 +3,12 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VENV_DIR="${VENV_DIR:-$ROOT_DIR/.venv}"
-MODEL_DIR="${MODEL_DIR:-$ROOT_DIR/models/Qwen3-0.6B}"
+MODEL_DIR="${MODEL_DIR:-$ROOT_DIR/models/Qwen3.5-4B}"
 MODEL_REPO="${MODEL_REPO:-}"
 TRAIN_FILE="${TRAIN_FILE:-$ROOT_DIR/data/train_pairs.sample.jsonl}"
 VALIDATION_FILE="${VALIDATION_FILE:-}"
 TEST_FILE="${TEST_FILE:-}"
-OUTPUT_DIR="${OUTPUT_DIR:-$ROOT_DIR/outputs/qwen3-0.6b-lora}"
+OUTPUT_DIR="${OUTPUT_DIR:-$ROOT_DIR/outputs/qwen3.5-4b-lora}"
 ACCEL_CONFIG="${ACCEL_CONFIG:-$ROOT_DIR/configs/accelerate_mps.yaml}"
 TARGET_MODULES="${TARGET_MODULES:-q_proj,k_proj,v_proj,o_proj}"
 GROUP_ID_FIELD="${GROUP_ID_FIELD:-}"
@@ -29,6 +29,7 @@ model_is_ready() {
 infer_model_repo_from_dir() {
   local dir="$1"
   case "$(basename "$dir")" in
+    Qwen3.5-4B|Qwen3_5-4B) echo "Qwen/Qwen3.5-4B" ;;
     Qwen3-0.6B) echo "Qwen/Qwen3-0.6B" ;;
     Qwen3-4B) echo "Qwen/Qwen3-4B" ;;
     Qwen3-8B) echo "Qwen/Qwen3-8B" ;;
@@ -126,7 +127,7 @@ fi
 
 if ! download_model_if_missing "$MODEL_DIR" "$MODEL_REPO"; then
   echo "Model not ready after auto-download attempts."
-  echo "Try: MODEL_REPO=Qwen/Qwen3-4B bash scripts/start_train_merged.sh --model qwen3:4b"
+  echo "Try: MODEL_REPO=Qwen/Qwen3.5-4B bash scripts/start_train_merged.sh --model qwen3.5:4b"
   exit 1
 fi
 

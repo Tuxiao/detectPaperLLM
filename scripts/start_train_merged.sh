@@ -4,7 +4,7 @@ set -euo pipefail
 # 自动获取脚本所在目录和项目根目录
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-MODEL_PRESET="${MODEL_PRESET:-qwen3:0.6b}"
+MODEL_PRESET="${MODEL_PRESET:-qwen3.5:4b}"
 MODEL_DIR="${MODEL_DIR:-}"
 MODEL_REPO="${MODEL_REPO:-}"
 DATA_DIR="${DATA_DIR:-}"
@@ -15,7 +15,7 @@ usage() {
 Usage: start_train_merged.sh [options]
 
 Options:
-  --model <preset>    Model preset: qwen3:0.6b (default), qwen3:4b, qwen3:8b
+  --model <preset>    Model preset: qwen3.5:4b (default), qwen3:0.6b, qwen3:4b, qwen3:8b
   --model-repo <repo> Override model repo (e.g. Qwen/Qwen3-4B)
   --model-dir <path>  Override local model directory
   --data-dir <path>   Data directory containing train.jsonl / dev.jsonl / test.jsonl
@@ -28,6 +28,12 @@ resolve_model_preset() {
   local preset
   preset="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
   case "$preset" in
+    qwen3.5:4b|qwen3.5-4b|qwen3_5:4b|qwen3_5-4b|3.5:4b|3.5-4b)
+      MODEL_PRESET="qwen3.5:4b"
+      MODEL_REPO_DEFAULT="Qwen/Qwen3.5-4B"
+      MODEL_DIR_DEFAULT="$ROOT_DIR/models/Qwen3.5-4B"
+      OUTPUT_PREFIX_DEFAULT="qwen3.5-4b-lora"
+      ;;
     qwen3:0.6b|qwen3-0.6b|0.6b)
       MODEL_PRESET="qwen3:0.6b"
       MODEL_REPO_DEFAULT="Qwen/Qwen3-0.6B"
@@ -48,7 +54,7 @@ resolve_model_preset() {
       ;;
     *)
       echo "Unsupported model preset: $1"
-      echo "Supported presets: qwen3:0.6b, qwen3:4b, qwen3:8b"
+      echo "Supported presets: qwen3.5:4b, qwen3:0.6b, qwen3:4b, qwen3:8b"
       exit 1
       ;;
   esac

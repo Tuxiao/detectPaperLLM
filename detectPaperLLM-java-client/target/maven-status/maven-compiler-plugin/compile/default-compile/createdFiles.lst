@@ -1,0 +1,9 @@
+com/detectanyllm/client/DetectAnyLLMClient.class
+com/detectanyllm/client/model/PredictResponse.class
+com/detectanyllm/client/judge/DetectionJudge.class
+com/detectanyllm/client/judge/RiskLevel.class
+com/detectanyllm/client/model/PredictionResult.class
+com/detectanyllm/client/model/HealthResponse.class
+com/detectanyllm/client/model/PredictRequest.class
+com/detectanyllm/client/Main.class
+com/detectanyllm/client/judge/DetectionVerdict.class

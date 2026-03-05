@@ -1,0 +1,14 @@
+# Whitelist mode — exclude everything by default, only allow build-needed files.
+*
+
+# Allow build essentials
+!deploy/
+!deploy-lite/
+!src/
+!pyproject.toml
+
+# Still exclude caches inside allowed dirs
+__pycache__
+*.pyc
+*.egg-info
+.DS_Store
