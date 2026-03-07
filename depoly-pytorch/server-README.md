@@ -3,19 +3,16 @@
 ## 目录结构
 
 ```
-depoly-pytorch/
-├── serve.py          # FastAPI 服务入口
-├── inference.py      # DC 计算（自包含，来自 predict.py + discrepancy.py）
-├── model_loader.py   # 模型加载（自包含，来自 lora.py）
-├── reference.py      # 参考分布 KNN 概率估计（自包含，来自 reference_clustering.py）
-├── requirements.txt  # 依赖：torch, transformers, peft, fastapi, uvicorn
-├── start.sh          # 一键启动脚本
-├── model-info.md     # 模型信息
-└── GPU-machine.ini   # GPU 机器信息
-```
+    depoly-pytorch/
+    ├── serve.py          # FastAPI 服务入口
+    ├── requirements.txt  # 依赖：torch, transformers, peft, fastapi, uvicorn
+    ├── start.sh          # 一键启动脚本
+    ├── model-info.md     # 模型信息
+    └── GPU-machine.ini   # GPU 机器信息
+    ```
 
-> [!IMPORTANT]
-> 零外部代码依赖 — 所有推理逻辑已拷贝为本地模块，可直接拷贝整个目录到任何机器部署。
+    > [!IMPORTANT]
+    > 零外部代码依赖 — 推理核心逻辑直接复用了训练目录下的 `src/detectanyllm/training` 和 `src/detectanyllm/infer`。
 
 ## 测试结果
 

@@ -12,17 +12,21 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import sys
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
+
+# Add src to sys.path so we can import from detectanyllm
+sys.path.append(str(Path(__file__).resolve().parent.parent / "src"))
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from inference import compute_dc_for_text
-from model_loader import load_model_for_inference
-from reference import estimate_probability, load_reference_stats
+from detectanyllm.training.discrepancy import compute_dc
+from detectanyllm.modeling.lora import load_model_for_inference
+from detectanyllm.infer.reference_clustering import estimate_probability, load_reference_stats
 
 logger = logging.getLogger("detectanyllm.serve")
 
@@ -219,15 +223,28 @@ async def predict(req: PredictRequest):
 
     def _score_one(text: str) -> PredictionResult:
         try:
-            d_c = compute_dc_for_text(
-                model=_model,
-                tokenizer=_tokenizer,
-                text=text,
+            # Tokenize locally
+            encoded = _tokenizer(
+                text,
+                truncation=True,
                 max_length=max_length,
+                padding=False,
+                return_tensors="pt",
+            )
+            input_ids = encoded["input_ids"]
+            attention_mask = encoded["attention_mask"]
+
+            if input_ids.shape[1] < 2:
+                raise ValueError("Text is too short after tokenization (<2 tokens).")
+
+            d_c = compute_dc(
+                model=_model,
+                input_ids=input_ids,
+                attention_mask=attention_mask,
                 num_perturb_samples=num_perturb,
                 sigma_eps=_config["sigma_eps"],
-                device=_device,
             )
+            d_c = float(d_c.item())
         except ValueError:
             return PredictionResult(
                 text=text,
@@ -258,7 +275,7 @@ async def predict(req: PredictRequest):
         if decision_mode == "pm":
             label_pred = "MACHINE" if p_m is not None and p_m >= 0.5 else "HUMAN"
         else:
-            label_pred = "MACHINE" if d_c > threshold else "HUMAN"
+            label_pred = "MACHINE" if d_c >= threshold else "HUMAN"
 
         return PredictionResult(
             text=text,

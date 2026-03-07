@@ -161,7 +161,7 @@ def infer_file(
         if decision_mode == "pm":
             label_pred = "MACHINE" if p_m is not None and p_m >= 0.5 else "HUMAN"
         else:
-            label_pred = "MACHINE" if d_c > threshold else "HUMAN"
+            label_pred = "MACHINE" if d_c >= threshold else "HUMAN"
 
         records_out.append(
             {
