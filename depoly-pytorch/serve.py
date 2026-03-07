@@ -170,6 +170,24 @@ async def health():
     }
 
 
+@app.get("/info")
+async def info():
+    if _model is None:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+    
+    # 尝试从模型配置获取型号
+    model_type = getattr(_model.config, "model_type", "unknown")
+    
+    return {
+        "adapter_path": _config.get("model_path"),
+        "base_model_path": _config.get("base_model"),
+        "model_type": model_type,
+        "device": str(_device),
+        "decision_mode": _config.get("decision_mode"),
+        "threshold": _config.get("threshold"),
+    }
+
+
 @app.post("/predict", response_model=PredictResponse)
 async def predict(req: PredictRequest):
     if _model is None:
